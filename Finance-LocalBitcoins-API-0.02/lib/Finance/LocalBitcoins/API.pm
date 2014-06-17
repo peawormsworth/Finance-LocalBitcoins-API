@@ -212,8 +212,8 @@ sub new             { (bless {} => shift)->init(@_)                  }
 sub path            { URI->new(shift->http_request->uri)->path       }
 sub request_content { shift->request->request_content                }
 sub json            { shift->{json} ||= JSON->new                    }
-sub private         { shift->request->is_private                     }
 sub is_success      { defined shift->response                        }
+sub private         { shift->request->is_private                     }
 sub public          { not shift->private                             }
 sub attributes      { ATTRIBUTES                                     }
 
@@ -277,6 +277,46 @@ sub class_action {
     $self->request($class->new(@_));
     return $self->send ? $self->response : undef;
 }
+
+# These additional routines will allow you to easily encrypt your API secret using a similar but random text string as a key.
+# Generate and store a random string of 40 hex chars in your script.
+#   perl -e 'use Finance::CaVirtex::API qw(string_encrypt); print "Encrypted: %s\n", string_encrypt('put your token here', $random_key);
+# to output the cyphertext of the real secret encrypted using your key.
+# Your script should then load the cyphertext from an external file and call this:
+#   my $api_secret = string_decrypt($cyphertext, $random_key);
+# Since both the random_key and the cyphertext are in separate files, a breach would require both files to be compromised.
+# If you also put the token into a database table that is accessed during runtime... then you are further protected.
+# This setup would require 3 distinct components which would all need to be compromised to gain unwanted access to your API keys and functions.
+#
+# From the command line, you can generate a set of semi-random strings that should be good enough for this using:
+#  perl -e 'print join("",("a".."z",0..9)[map rand$_,(36) x 22])."\n"for 1..20;'
+#
+# select one of those as your random_key.
+#
+
+# encryption works by assigning an ordinal value to each character '0' = 0 ... 'Z' = 35
+# these values are then added for each character in the cypher and the random key.
+# the modulus of the sum is then taken to remain within the 36 available characters.
+# this number is then converted back to character.
+# once each character of the string is calculated, the complete cyphertext is generated.
+#
+# the end result is that we are adding the secret string to the random key string to obtain the cyphertext:
+#    Cypher = Secret + Key
+#
+# decryption is exactly like encryption except we take the difference of each character
+# instead of the sum. 
+#
+# the end result is thatIn this way we are subtracting the random key from the cyphertext to get back the secret string.
+#    Secret = Cypher - Key
+#
+# I believe this method is equivalent to XOR encryption, which is very strong as long as the key is random and kept secret.
+#
+sub alphanum_to_digit { ord($_[0]) > 57 ? ord($_[0]) - 87 : ord($_[0]) - 48  }
+sub digit_to_alphanum { chr($_[0]  >  9 ?     $_[0]  + 87 :     $_[0]  + 48) }
+sub string_encrypt    { join '', map(digit_to_alphanum((alphanum_to_digit(substr $_[0], $_, 1) + alphanum_to_digit(substr $_[1], $_, 1)) % 36), 0 .. length($_[0]) - 1) }
+sub string_decrypt    { join '', map(digit_to_alphanum((alphanum_to_digit(substr $_[0], $_, 1) - alphanum_to_digit(substr $_[1], $_, 1)) % 36), 0 .. length($_[0]) - 1) }
+sub gen_random_key    { join("",("a".."f",0..9)[map rand$_,(16) x 40]) }
+
 
 1;
 
