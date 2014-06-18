@@ -9,22 +9,19 @@ Also available on MetaCPAN:
 
      https://metacpan.org/pod/Finance::LocalBitcoins::API
 
-Install using CPAN:
+Development and archived versions:
 
-     $ perl -MCPAN -e 'install Finance::LocalBitcoins::API'
+     https://github.com/peawormsworth/Finance-LocalBitcoins-API
 
 Sample Usage:
 
-    my $api  = Finance::LocalBitcoins::API->new(token => $key, secret => $secret, client_id => $client_id);
-    my $order = $api->order(currencypair => 'USDCAD', mode => 'bid', amount => '4.5', price => '1000.00');
+    my $api = Finance::LocalBitcoins::API->new(token => $token);
+    my $api->$method(%params);
 
-    if ($order) {
-        printf "The LocalBitcoins invoice ID is %s. You can see it here: %s\n", @{$order}{qw(id url)};
-    }
-    else {
-        printf "An error occurred: %s\n", $api->error;
-    }
-
+where:
+    $token is your Oauth token
+    $method is an LBC api call (contacts(), me(), message())
+    %params is a list of required and optional parameter key/value pairs as described in the LBC API docs.
 
 COPYRIGHT AND LICENSE
 

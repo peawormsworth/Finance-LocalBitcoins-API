@@ -226,7 +226,7 @@ sub go  {
     foreach my $test (@{PUBLIC_TESTS()}) {
         SKIP: {
             my ($name, $method, $active, $params) = @{$test}{qw(name method active params)};
-            skip "$method() test turned OFF", 1 unless RUN_PUBLIC_TESTS and $active;
+            skip "\$api->$method()\ttest turned OFF", 1 unless RUN_PUBLIC_TESTS and $active;
             unless ($self->$method($self->api->$method($params ? (%$params) : ()))) {
                 diag(Data::Dumper->Dump([$self->api->error], [sprintf '%s Error', $name]));
             }
@@ -241,7 +241,7 @@ sub go  {
     foreach my $test (@{PRIVATE_TESTS()}) {
         SKIP: {
             my ($name, $method, $active, $params) = @{$test}{qw(name method active params)};
-            skip "$method() test turned OFF", 1 unless RUN_PRIVATE_TESTS and $active;
+            skip "\$api->$method()\ttest turned OFF", 1 unless RUN_PRIVATE_TESTS and $active;
             unless ($self->$method($self->api->$method($params ? (%$params) : ()))) {
                 diag(Data::Dumper->Dump([$self->api->error], [sprintf '%s Error', $name]));
             }
