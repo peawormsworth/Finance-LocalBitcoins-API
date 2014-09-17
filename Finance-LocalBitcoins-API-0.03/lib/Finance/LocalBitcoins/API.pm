@@ -473,7 +473,7 @@ If there is a network error (not 200), then the error code and $response->error 
 
 =head1 SEE ALSO
 
-The LocalBitcoins API documentation: unknown (2014-06-11). contact Cavirtex.
+The LocalBitcoins API documentation: https://localbitcoins.com/api-docs/
 This project on Github: https://github.com/peawormsworth/Finance-LocalBitcoins-API
 
 =head1 AUTHOR
