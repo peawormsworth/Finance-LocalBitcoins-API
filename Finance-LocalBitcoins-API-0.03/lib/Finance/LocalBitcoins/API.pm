@@ -14,6 +14,9 @@ use LWP::UserAgent 6;
 use URI;
 use JSON;
 use Data::Dumper;
+use MIME::Base64;
+use Time::HiRes qw(gettimeofday);
+use Digest::SHA qw(hmac_sha256_hex);
 
 ## PUBLIC requests..
 use Finance::LocalBitcoins::API::Request::Ticker;
@@ -54,7 +57,7 @@ use constant ERROR_IS_IT_READY    => "The request is%s READY to send\n";
 use constant ERROR_RESPONSE       => COMPANY . ' error';
 use constant ERROR_UNKNOWN_STATUS => COMPANY . " returned an unknown status\n";
 
-use constant ATTRIBUTES => qw(token);
+use constant ATTRIBUTES => qw(token oauth_token hmac_key hmac_secret);
 
 use constant CLASS_ACTION_MAP => {
     user           => 'Finance::LocalBitcoins::API::Request::User',
@@ -93,7 +96,7 @@ sub is_ready_to_send {
     # here we are checking whether or not to default to '0' (not ready to send) based on this objects settings.
     # the setting in here is the token provided to you by LocalBitcoins.
     # if we dont have to add a token, then just check if its ready...
-    if (not $self->private or defined $self->token) {
+    if (not $self->private or defined $self->oauth_token or (defined $self->hmac_key and $self->hmac_secret)) {
        $ready = $self->request->is_ready_to_send;
     }
     warn sprintf ERROR_IS_IT_READY, ($ready ? '' : ' NOT') if DEBUG;
@@ -128,18 +131,19 @@ sub send {
             $request->method($self->request->request_type);
             $request->uri($self->request->url);
             my %query_form = %{$self->request_content};
-#
-# This block will be removed once we have basic testing completed.
-# ...because printing these variables on a live system is not a good idea...
-#
-#if ($self->private) {
-#    print Data::Dumper->Dump([\%query_form],['Query Form']);
-#    printf "Token: %s\n", $self->token;
-#    printf "Path: %s\n", $self->path;
-#}
-#
             if ($self->private) {
-                $query_form{access_token} = $self->token;
+                if (defined $self->hmac_key and defined $self->hmac_secret) {
+                    $self->new_nonce;
+                    $request->header('Apiauth-Key'       => $self->hmac_key    );
+                    $request->header('Apiauth-Nonce'     => $self->nonce       );
+                    $request->header('Apiauth-Signature' => uc $self->signature($request));
+                }
+                elsif (defined $self->oauth_token) {
+                    $query_form{access_token} = $self->oauth_token;
+                }
+                else {
+                    die "I should NOT be here";
+                }
             }
 
             my $uri = URI->new;
@@ -168,11 +172,19 @@ sub send {
     return $self->is_success;
 }
 
+sub signature { 
+    my $self    = shift;
+    my $request = shift;
+    return hmac_sha256_hex($self->nonce, $self->hmac_key, $self->path, $request->content, $self->hmac_secret);
+}
+sub nonce     { get_set(@_) }
+sub new_nonce { shift->nonce(sprintf '%d%06d' => gettimeofday) }
+sub sorted_request_values { @{$_[0]->request_content}{sort {lc($a) cmp lc($b)} keys $_[0]->request_content} }
+
 sub process_response {
     my $self = shift;
 
     warn sprintf "Content: %s\n", $self->http_response->content if DEBUG;
-
     eval {
         my $content;
         warn Data::Dumper->Dump([$self->http_response],['Response']) if DEBUG;
@@ -208,14 +220,14 @@ sub process_response {
     return $self->is_success;
 }
 
-sub new             { (bless {} => shift)->init(@_)                  }
-sub path            { URI->new(shift->http_request->uri)->path       }
-sub request_content { shift->request->request_content                }
-sub json            { shift->{json} ||= JSON->new                    }
-sub is_success      { defined shift->response                        }
-sub private         { shift->request->is_private                     }
-sub public          { not shift->private                             }
-sub attributes      { ATTRIBUTES                                     }
+sub new             { (bless {} => shift)->init(@_)            }
+sub path            { URI->new(shift->http_request->uri)->path }
+sub request_content { shift->request->request_content          }
+sub json            { shift->{json} ||= JSON->new              }
+sub is_success      { defined shift->response                  }
+sub private         { shift->request->is_private               }
+sub public          { not shift->private                       }
+sub attributes      { ATTRIBUTES                               }
 
 sub user            { class_action(@_) }
 sub me              { class_action(@_) }
@@ -246,7 +258,12 @@ sub ticker          { class_action(@_) }
 sub tradebook       { class_action(@_) }
 sub orderbook       { class_action(@_) }
 
-sub token           { get_set(@_) }
+# NOTE: use of token() attribute is depricated. Use oauth_token() instead...
+sub token           { oauth_token(@_) }
+
+sub oauth_token     { get_set(@_) }
+sub hmac_key        { get_set(@_) }
+sub hmac_secret     { get_set(@_) }
 sub error           { get_set(@_) }
 sub http_response   { get_set(@_) }
 sub request         { get_set(@_) }
@@ -280,13 +297,13 @@ sub class_action {
 
 # These additional routines will allow you to easily encrypt your API secret using a similar but random text string as a key.
 # Generate and store a random string of 40 hex chars in your script.
-#   perl -e 'use Finance::CaVirtex::API qw(string_encrypt); print "Encrypted: %s\n", string_encrypt('put your token here', $random_key);
+#   perl -e 'use Finance::LocalBitcoins::API qw(string_encrypt); print "Encrypted: %s\n", string_encrypt('put your token here', $random_key);
 # to output the cyphertext of the real secret encrypted using your key.
 # Your script should then load the cyphertext from an external file and call this:
-#   my $api_secret = string_decrypt($cyphertext, $random_key);
+#   my $hmac_secret = string_decrypt($cyphertext, $random_key);
 # Since both the random_key and the cyphertext are in separate files, a breach would require both files to be compromised.
-# If you also put the token into a database table that is accessed during runtime... then you are further protected.
-# This setup would require 3 distinct components which would all need to be compromised to gain unwanted access to your API keys and functions.
+# If you also put the key into a database table that is accessed during runtime... then you are further protected.
+# This setup would require 3 distinct components which would all need to be compromised to gain unwanted access to your API key and secret.
 #
 # From the command line, you can generate a set of semi-random strings that should be good enough for this using:
 #  perl -e 'print join("",("a".."z",0..9)[map rand$_,(36) x 22])."\n"for 1..20;'
@@ -313,10 +330,9 @@ sub class_action {
 #
 sub alphanum_to_digit { ord($_[0]) > 57 ? ord($_[0]) - 87 : ord($_[0]) - 48  }
 sub digit_to_alphanum { chr($_[0]  >  9 ?     $_[0]  + 87 :     $_[0]  + 48) }
-sub string_encrypt    { join '', map(digit_to_alphanum((alphanum_to_digit(substr $_[0], $_, 1) + alphanum_to_digit(substr $_[1], $_, 1)) % 36), 0 .. length($_[0]) - 1) }
-sub string_decrypt    { join '', map(digit_to_alphanum((alphanum_to_digit(substr $_[0], $_, 1) - alphanum_to_digit(substr $_[1], $_, 1)) % 36), 0 .. length($_[0]) - 1) }
-sub gen_random_key    { join("",("a".."f",0..9)[map rand$_,(16) x 40]) }
-
+sub string_encrypt    { join '', map(digit_to_alphanum((alphanum_to_digit(substr $_[0], $_, 1) + alphanum_to_digit(substr $_[1], $_, 1)) % 64), 0 .. length($_[0]) - 1) }
+sub string_decrypt    { join '', map(digit_to_alphanum((alphanum_to_digit(substr $_[0], $_, 1) - alphanum_to_digit(substr $_[1], $_, 1)) % 64), 0 .. length($_[0]) - 1) }
+sub gen_random_key    { join("",("a".."f",0..9)[map rand$_,(64) x 40]) }
 
 1;
 
@@ -404,7 +420,14 @@ The methods you call that match the API spec are:
 
 =head2 new()
 
+Using the HMAC method...
+    my $api = Finance::LocalBitcoins::API->new(hmac_key => $key, hmac_secret => $secret);
+
+Using the Oauth method...
     my $api = Finance::LocalBitcoins::API->new(token => $token);
+
+Using only the public methods...
+    my $api = Finance::LocalBitcoins::API->new;
 
 Create a new Finance::LocalBitcoins::API object.
 token is required.
@@ -416,6 +439,16 @@ These values are provided by LocalBitcoins through their online administration i
 The methods you will use are discussed in the DESCRIPTION. For details on valid parameter values, please consult the offical LocalBitcoins API documentation.
 
 =head1 ATTRIBUTES
+
+=head2 hmac_key()
+
+This value is created on the Localbitcoins site in the API authentications section on the administration page here: https://localbitcoins.com/accounts/api.
+You will usually set this during the new() request on object instantiation as the hash value with a key by the same name.
+
+=head2 hmac_secret()
+
+This value is created on the Localbitcoins site in the API authentications section on the administration page here: https://localbitcoins.com/accounts/api.
+You will usually set this during the new() request on object instantiation as the hash value with a key by the same name.
 
 =head2 token()
 

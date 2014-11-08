@@ -1,5 +1,5 @@
 In no particular order:
 
-- finish and expand tests
-- provide some sort of checking of test responses (proof of success)
+- run tests on the write access requests.... such as changing advertisements. Use these methods at your own risk.
+- add support for pagination and write tests for this.
 

@@ -4,3 +4,6 @@ Revision history for Perl extension Finance::CaVirtex::API.
 	- original version; created by h2xs 1.23 with options
 		-AX Finance::CaVirtex::API
 
+0.03 Fri Nov 7 16:36:00 2014
+        - add support for HMAC authenticated requests
+

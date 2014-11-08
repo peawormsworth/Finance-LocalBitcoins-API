@@ -1,5 +1,5 @@
 #!/usr/bin/perl -wT
-use Test::More tests => 30;
+use Test::More tests => 55;
 
 use 5.010;
 use warnings;
@@ -13,13 +13,20 @@ use constant DEBUG   => 0;
 use constant VERBOSE => 0;
 
 # Your LocalBitcoins API OAuth token goes here...
-use constant OAUTH_TOKEN        => 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx';
+use constant OAUTH_TOKEN         => 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx';
+
+# Your LocalBitcoins HMAC key and secret goes here...
+use constant HMAC_KEY            => 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx';
+use constant HMAC_SECRET         => 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx';
 
 use constant PACKAGE             => 'Finance::LocalBitcoins::API';
 
 # turn test groups On/Off Globally...
 use constant RUN_PUBLIC_TESTS    => 1;
 use constant RUN_PRIVATE_TESTS   => 1;
+
+use constant TEST_OAUTH          => 1;
+use constant TEST_HMAC           => 1;
 
 # Public Test Switches...
 use constant TEST_TICKER         => 1;
@@ -38,6 +45,7 @@ use constant TEST_USER           => 1;
 use constant TEST_ME             => 1;
 use constant TEST_PIN            => 1;
 use constant TEST_DASH           => 1;
+
 use constant TEST_RELEASE_ESCROW => undef;
 use constant TEST_PAID           => undef;
 use constant TEST_MESSAGES       => undef;
@@ -237,23 +245,45 @@ sub go  {
     say '=== End PUBLIC tests' if VERBOSE;
 
     say '=== Begin PRIVATE tests' if VERBOSE;
-    isa_ok($self->set_private, PACKAGE);
-    foreach my $test (@{PRIVATE_TESTS()}) {
-        SKIP: {
-            my ($name, $method, $active, $params) = @{$test}{qw(name method active params)};
-            skip "\$api->$method()\ttest turned OFF", 1 unless RUN_PRIVATE_TESTS and $active;
-            unless ($self->$method($self->api->$method($params ? (%$params) : ()))) {
-                diag(Data::Dumper->Dump([$self->api->error], [sprintf '%s Error', $name]));
+
+    if (TEST_HMAC) {
+        say '=== Begin HMAC tests' if VERBOSE;
+        isa_ok($self->set_hmac, PACKAGE);
+        foreach my $test (@{PRIVATE_TESTS()}) {
+            SKIP: {
+                my ($name, $method, $active, $params) = @{$test}{qw(name method active params)};
+                skip "\$api->$method()\ttest turned OFF", 1 unless RUN_PRIVATE_TESTS and $active;
+                unless ($self->$method($self->api->$method($params ? (%$params) : ()))) {
+                    diag(Data::Dumper->Dump([$self->api->error], [sprintf '%s Error', $name]));
+                }
+                ok($self->$method, sprintf 'private request: $api->%s()', $method);
+                print Data::Dumper->Dump([$self->$method],[$name]) if DEBUG;
             }
-            ok($self->$method, sprintf 'private request: $api->%s()', $method);
-            print Data::Dumper->Dump([$self->$method],[$name]) if DEBUG;
         }
     }
+
+    if (TEST_OAUTH) {
+        say '=== Begin OAUTH tests' if VERBOSE;
+        isa_ok($self->set_oauth, PACKAGE);
+        foreach my $test (@{PRIVATE_TESTS()}) {
+            SKIP: {
+                my ($name, $method, $active, $params) = @{$test}{qw(name method active params)};
+                skip "\$api->$method()\ttest turned OFF", 1 unless RUN_PRIVATE_TESTS and $active;
+                unless ($self->$method($self->api->$method($params ? (%$params) : ()))) {
+                    diag(Data::Dumper->Dump([$self->api->error], [sprintf '%s Error', $name]));
+                }
+                ok($self->$method, sprintf 'private request: $api->%s()', $method);
+                print Data::Dumper->Dump([$self->$method],[$name]) if DEBUG;
+            }
+        }
+    }
+
     say '=== End PRIVATE tests' if VERBOSE;
 }
 
 sub set_public     { shift->api(Finance::LocalBitcoins::API->new) }
-sub set_private    { shift->api(Finance::LocalBitcoins::API->new(token => OAUTH_TOKEN)) }
+sub set_oauth      { shift->api(Finance::LocalBitcoins::API->new(oauth_token => OAUTH_TOKEN)) }
+sub set_hmac       { shift->api(Finance::LocalBitcoins::API->new(hmac_key    => HMAC_KEY, hmac_secret => HMAC_SECRET)) }
 
 sub api            { get_set(@_) }
 sub ticker         { get_set(@_) }
