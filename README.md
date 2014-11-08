@@ -15,10 +15,12 @@ Development and archived versions:
 
 Sample Usage:
 
-    my $api = Finance::LocalBitcoins::API->new(token => $token);
+    my $api = Finance::LocalBitcoins::API->new(hmac_key => $key, hmac_secret => $secret);
+    my $api = Finance::LocalBitcoins::API->new(oauth_token => $token);
     my $api->$method(%params);
 
 where:
+    $key and $secret are the HMAC values supplied by Localbitcoins
     $token is your Oauth token
     $method is an LBC api call (contacts(), me(), message())
     %params is a list of required and optional parameter key/value pairs as described in the LBC API docs.
