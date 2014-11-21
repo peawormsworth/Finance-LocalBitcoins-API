@@ -8,7 +8,7 @@ use constant ATTRIBUTES => qw(contacts);
 
 sub url              { URL          }
 sub attributes       { ATTRIBUTES   }
-sub is_ready_to_send { return defined shift->contacts }
+sub is_ready_to_send { defined shift->contacts }
 # WARNING: THIS IS A WEIRD ROUTINE!
 # it accepts an array and returns a comma separated list. ie:
 # my $return = $api->currency('this','that','other');

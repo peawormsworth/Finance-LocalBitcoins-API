@@ -27,7 +27,11 @@ use Finance::LocalBitcoins::API::Request::OrderBook;
 use Finance::LocalBitcoins::API::Request::User;
 use Finance::LocalBitcoins::API::Request::Me;
 use Finance::LocalBitcoins::API::Request::Pin;
+use Finance::LocalBitcoins::API::Request::Pagination;
 use Finance::LocalBitcoins::API::Request::Dash;
+use Finance::LocalBitcoins::API::Request::DashReleased;
+use Finance::LocalBitcoins::API::Request::DashCanceled;
+use Finance::LocalBitcoins::API::Request::DashClosed;
 use Finance::LocalBitcoins::API::Request::Wallet;
 use Finance::LocalBitcoins::API::Request::Balance;
 use Finance::LocalBitcoins::API::Request::ReleaseEscrow;
@@ -63,7 +67,11 @@ use constant CLASS_ACTION_MAP => {
     user           => 'Finance::LocalBitcoins::API::Request::User',
     me             => 'Finance::LocalBitcoins::API::Request::Me',
     pin            => 'Finance::LocalBitcoins::API::Request::Pin',
+    pagination     => 'Finance::LocalBitcoins::API::Request::Pagination',
     dash           => 'Finance::LocalBitcoins::API::Request::Dash',
+    dash_released  => 'Finance::LocalBitcoins::API::Request::DashReleased',
+    dash_canceled  => 'Finance::LocalBitcoins::API::Request::DashCanceled',
+    dash_closed    => 'Finance::LocalBitcoins::API::Request::DashClosed',
     release_escrow => 'Finance::LocalBitcoins::API::Request::ReleaseEscrow',
     paid           => 'Finance::LocalBitcoins::API::Request::Paid',
     messages       => 'Finance::LocalBitcoins::API::Request::Messages',
@@ -131,19 +139,8 @@ sub send {
             $request->method($self->request->request_type);
             $request->uri($self->request->url);
             my %query_form = %{$self->request_content};
-            if ($self->private) {
-                if (defined $self->hmac_key and defined $self->hmac_secret) {
-                    $self->new_nonce;
-                    $request->header('Apiauth-Key'       => $self->hmac_key    );
-                    $request->header('Apiauth-Nonce'     => $self->nonce       );
-                    $request->header('Apiauth-Signature' => uc $self->signature($request));
-                }
-                elsif (defined $self->oauth_token) {
-                    $query_form{access_token} = $self->oauth_token;
-                }
-                else {
-                    die "I should NOT be here";
-                }
+            if ($self->private and defined $self->oauth_token) {
+                $query_form{access_token} = $self->oauth_token;
             }
 
             my $uri = URI->new;
@@ -156,6 +153,13 @@ sub send {
                 $request->uri($request->uri . '?' . $uri->query);
             }
    
+            if ($self->private and defined $self->hmac_key and defined $self->hmac_secret) {
+                $self->new_nonce;
+                $request->header('Apiauth-Key'       => $self->hmac_key    );
+                $request->header('Apiauth-Nonce'     => $self->nonce       );
+                $request->header('Apiauth-Signature' => uc $self->signature($uri));
+            }
+
             $request->header(Accept => 'application/json');
 
             # create a new user_agent each time...
@@ -173,9 +177,16 @@ sub send {
 }
 
 sub signature { 
-    my $self    = shift;
-    my $request = shift;
-    return hmac_sha256_hex($self->nonce, $self->hmac_key, $self->path, $request->content, $self->hmac_secret);
+    my $self  = shift;
+    my $uri   = shift;
+#warn "Making signature\n";
+#warn "Nonce: "       . $self->nonce;
+#warn "HMAC key: "    . $self->hmac_key;
+#warn "Path: "        . $self->path;
+#warn "URI->query: "  . $uri->query || '';
+#warn "HMAC secret: " . $self->hmac_secret;
+#warn "Signature: "   . hmac_sha256_hex($self->nonce, $self->hmac_key, $self->path, $uri->query || '', $self->hmac_secret);
+    return hmac_sha256_hex($self->nonce, $self->hmac_key, $self->path, $uri->query || '', $self->hmac_secret);
 }
 sub nonce     { get_set(@_) }
 sub new_nonce { shift->nonce(sprintf '%d%06d' => gettimeofday) }
@@ -188,6 +199,7 @@ sub process_response {
     eval {
         my $content;
         warn Data::Dumper->Dump([$self->http_response],['Response']) if DEBUG;
+        #warn "I AM (request): " . ref $self->request;
         $content = $self->json->decode($self->http_response->content);
         if (ref $content eq 'ARRAY') {
             $self->response($content);
@@ -232,7 +244,11 @@ sub attributes      { ATTRIBUTES                               }
 sub user            { class_action(@_) }
 sub me              { class_action(@_) }
 sub pin             { class_action(@_) }
+sub pagination      { class_action(@_) }
 sub dash            { class_action(@_) }
+sub dash_released   { class_action(@_) }
+sub dash_canceled   { class_action(@_) }
+sub dash_closed     { class_action(@_) }
 sub release_escrow  { class_action(@_) }
 sub paid            { class_action(@_) }
 sub messages        { class_action(@_) }
